@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Solar System Top-Down • A-Frame</title>
+    <meta name="description" content="Top-down view of the solar system" />
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <style>
+      body { margin: 0; overflow: hidden; }
+      #screenshotBtn {
+        position: fixed;
+        right: 16px;
+        top: 16px;
+        z-index: 999;
+        background: rgba(255,255,255,0.9);
+        border: none;
+        padding: 10px 14px;
+        font-size: 14px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      #info {
+        position: fixed;
+        left: 16px;
+        top: 16px;
+        z-index: 999;
+        color: white;
+        font-family: sans-serif;
+        background: rgba(0,0,0,0.4);
+        padding: 8px 10px;
+        border-radius: 6px;
+      }
+    </style>
+    <script>
+      AFRAME.registerComponent('solar-system-top', {
+        init: function () {
+          const scene = this.el.sceneEl.object3D;
+
+          // ดวงอาทิตย์ (ขยายให้เห็นชัดจากมุมสูง)
+          const sunGeo = new THREE.SphereGeometry(1.2, 32, 32);
+          const sunMat = new THREE.MeshStandardMaterial({
+            emissive: new THREE.Color(0xffcc00),
+            emissiveIntensity: 1.8,
+            color: 0x000000
+          });
+          const sun = new THREE.Mesh(sunGeo, sunMat);
+          scene.add(sun);
+
+          // ดาวเคราะห์ (ปรับระยะให้รวมในมุมสูง)
+          const planetsData = [
+            { name: "Mercury", radius: 3.0, size: 0.18, color: 0xaaaaaa, speed: 0.02 },
+            { name: "Venus", radius: 4.2, size: 0.25, color: 0xffcc66, speed: 0.015 },
+            { name: "Earth", radius: 5.6, size: 0.3, color: 0x3399ff, speed: 0.01 },
+            { name: "Mars", radius: 7.0, size: 0.22, color: 0xff6633, speed: 0.008 },
+            { name: "Jupiter", radius: 9.8, size: 0.7, color: 0xffcc99, speed: 0.006 },
+            { name: "Saturn", radius: 12.2, size: 0.6, color: 0xffcc00, speed: 0.005 },
+            { name: "Uranus", radius: 15.0, size: 0.45, color: 0x99ccff, speed: 0.004 },
+            { name: "Neptune", radius: 17.5, size: 0.42, color: 0x3366ff, speed: 0.003 }
+          ];
+
+          this.planets = [];
+
+          planetsData.forEach((p) => {
+            const geo = new THREE.SphereGeometry(p.size, 24, 24);
+            const mat = new THREE.MeshStandardMaterial({ color: p.color });
+            const planet = new THREE.Mesh(geo, mat);
+
+            planet.userData = { name: p.name, radius: p.radius, speed: p.speed, angle: Math.random() * Math.PI * 2 };
+            scene.add(planet);
+
+            // ดวงจันทร์สำหรับโลก
+            if (p.name === "Earth") {
+              const moonGeo = new THREE.SphereGeometry(0.09, 16, 16);
+              const moonMat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+              const moon = new THREE.Mesh(moonGeo, moonMat);
+              moon.userData = { radius: 0.7, speed: 0.05, angle: 0 };
+              planet.add(moon);
+              planet.userData.moon = moon;
+            }
+
+            // วงแหวนสำหรับดาวเสาร์
+            if (p.name === "Saturn") {
+              const ringGeo = new THREE.RingGeometry(p.size * 1.2, p.size * 2.2, 64);
+              const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xffdd99,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.7
+              });
+              const ring = new THREE.Mesh(ringGeo, ringMat);
+              ring.rotation.x = Math.PI / 2;
+              planet.add(ring);
+            }
+
+            this.planets.push(planet);
+          });
+
+          // แสงจากดวงอาทิตย์
+          const light = new THREE.PointLight(0xffffff, 2.2, 400);
+          scene.add(light);
+
+          // เพิ่ม ambient เล็กน้อย
+          const amb = new THREE.AmbientLight(0x222222);
+          scene.add(amb);
+
+          this.sun = sun;
+          this.light = light;
+        },
+
+        tick: function (time, delta) {
+          // หมุนวงโคจร
+          this.planets.forEach((planet) => {
+            planet.userData.angle += planet.userData.speed * 0.5; // ชะลอเพื่อเห็นวงโคจรชัดขึ้นในภาพ
+            const r = planet.userData.radius;
+            planet.position.set(Math.cos(planet.userData.angle) * r, 0, Math.sin(planet.userData.angle) * r);
+            planet.rotation.y += 0.005;
+
+            if (planet.userData.moon) {
+              const moon = planet.userData.moon;
+              moon.userData.angle += moon.userData.speed;
+              const mr = moon.userData.radius;
+              moon.position.set(Math.cos(moon.userData.angle) * mr, 0, Math.sin(moon.userData.angle) * mr);
+            }
+          });
+
+          // แสงตามดวงอาทิตย์
+          if (this.light && this.sun) this.light.position.copy(this.sun.position);
+        }
+      });
+
+      // ฟังก์ชันช่วยถ่ายภาพจาก canvas ของ A-Frame
+      function downloadTopDownImage() {
+        const sceneEl = document.querySelector('a-scene');
+        if (!sceneEl || !sceneEl.renderer) {
+          alert('ฉากยังโหลดไม่เสร็จ ลองอีกครั้งหลังจากหน้าจอแสดงผลแล้ว');
+          return;
+        }
+        // render 1 เฟรมเพื่อให้แน่ใจ
+        sceneEl.renderer.render(sceneEl.object3D, sceneEl.camera);
+        const dataURL = sceneEl.renderer.domElement.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = dataURL;
+        link.download = 'solar_topdown.png';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      // รอโหลด DOM เพื่อเพิ่มปุ่ม
+      window.addEventListener('DOMContentLoaded', () => {
+        const btn = document.createElement('button');
+        btn.id = 'screenshotBtn';
+        btn.textContent = 'ดาวน์โหลดภาพมุมสูง (PNG)';
+        btn.onclick = downloadTopDownImage;
+        document.body.appendChild(btn);
+      });
+    </script>
+  </head>
+
+  <body>
+    <a-scene background="color: #000010" embedded>
+      <!-- กล้องมุมสูงแนวดิ่งตรงลงมา -->
+      <a-entity position="0 30 0" rotation="-90 0 0">
+        <a-camera></a-camera>
+      </a-entity>
+
+      <a-entity solar-system-top></a-entity>
+
+      <!-- แสง ambient เพื่อให้เห็นรายละเอียดดาว -->
+      <a-entity light="type: ambient; color: #222"></a-entity>
+    </a-scene>
+  </body>
+</html>
